@@ -46,6 +46,107 @@ Unlike GANs (which try to map noise → data in one shot), diffusion models lear
 </p>
 
 ---
+
+## ⏪ Step 2 — Reverse (Denoising) Process & U-Net Backbone
+
+Once the forward process has gradually corrupted a clean image \(x_0\) into nearly pure noise \(x_T\),  
+the **reverse diffusion process** learns to invert this transformation step by step.
+
+Conceptually, the model:
+
+- Starts from pure noise \(x_T \sim \mathcal{N}(0, I)\).
+- At each timestep \(t = T-1, \dots, 0\), predicts the noise component in the current image.
+- Uses this prediction to update \(x_t \rightarrow x_{t-1}\) with a small denoising step.
+- After all steps, returns a clean (or at least realistic) sample \(x_0\).
+
+### 🔍 What the Model Learns
+
+Instead of directly predicting the clean image, the network is trained to **predict the added noise**:
+
+- During training:
+  - Sample a real image \(x_0\).
+  - Sample a timestep \(t\).
+  - Generate a noisy version \(x_t\) using the same closed-form forward process as before.
+  - Train the network to predict the noise \(\hat{\epsilon}_\theta(x_t, t)\).
+  - Use a simple MSE loss between the true noise and the predicted noise.
+
+This formulation is stable, simple, and works extremely well in practice.
+
+---
+
+## 🧱 U-Net Architecture (Backbone)
+
+We use a **U-Net** as the backbone for the denoising model:
+
+- **Encoder (down path)**  
+  - Repeated blocks of:  
+    - 2D convolutions  
+    - Normalization + non-linearity  
+    - Downsampling (reducing spatial resolution, increasing channels)
+  - Each block saves a **skip connection** feature map for the decoder.
+
+- **Bottleneck (middle)**  
+  - One or more residual blocks operating at the lowest resolution.
+  - Captures global structure and long-range context.
+
+- **Decoder (up path)**  
+  - Mirrors the encoder:
+    - Upsampling (transpose conv or interpolation + conv)
+    - Concatenation with corresponding encoder features (skip connections)
+    - Residual blocks to refine details
+  - Gradually reconstructs spatial detail as resolution increases.
+
+- **Output head**  
+  - A final 1×1 convolution maps the last feature map back to the same number of channels as the input image  
+    (e.g. 3 channels for RGB noise prediction).
+
+### Key Design Choices
+
+- **Input / output:**  
+  - Input: \(x_t\) in \([-1, 1]\), shape \([B, 3, H, W]\).  
+  - Output: predicted noise \(\hat{\epsilon}_\theta\) with the same shape.
+
+- **Depth & channels:**  
+  - Multiple resolution levels (downsampling → upsampling).  
+  - Channels typically grow as resolution shrinks (e.g. 64 → 128 → 256 → 512 → 1024).
+
+- **Skip connections:**  
+  - Preserve high-frequency detail by forwarding encoder features directly to matching decoder levels.
+
+---
+
+## ⏱️ Timestep Encoding (Time Embedding)
+
+The model also needs to know **which diffusion step** it is currently denoising.
+
+We therefore encode the scalar timestep \(t\) into a **time embedding vector**:
+
+- A sinusoidal (Fourier-style) embedding maps \(t\) to a vector of fixed size (the time embedding dimension).
+- This vector is then passed through a small MLP to obtain a richer representation.
+- The time embedding is injected into the U-Net blocks (e.g. as an additive bias on the feature channels).
+
+Intuitively:
+
+- Early timesteps (high noise) → the network focuses on coarse, global structure.  
+- Late timesteps (low noise) → the network refines fine-grained details and textures.
+
+---
+
+## 🧩 Putting It Together
+
+1. **Forward process**:  
+   - Defines how to corrupt an image \(x_0\) into \(x_t\) with a chosen noise schedule.
+
+2. **Reverse model (U-Net + time embedding)**:  
+   - Learns to predict the noise \(\hat{\epsilon}_\theta(x_t, t)\) at each step.
+
+3. **Sampling loop**:  
+   - Starts from pure noise \(x_T\).  
+   - Iteratively applies denoising steps using the model’s predictions until reaching \(x_0\).
+
+This backbone is flexible: it can be extended with conditioning (e.g. text, masks, diffusion MRI signals) or modified to follow alternative parameterizations (e.g. predicting \(x_0\) or v-parameterization) without changing the core idea.
+
+---
 ## ⚖️ Diffusion vs. Traditional Generative Models
 
 | Feature | Diffusion Models (DMs) | Traditional Generative AI (GANs / VAEs) |

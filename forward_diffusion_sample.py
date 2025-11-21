@@ -8,6 +8,10 @@ def linear_beta_schedule(timesteps, start=0.0001, end=0.02):
 
 
 T = 600
+IMG_SIZE = 64
+BATCH_SIZE = 128
+
+
 betas = linear_beta_schedule(T).to(device)
 alphas = (1. - betas)
 alphas_cumprod = torch.cumprod(alphas, dim=0).to(device)
@@ -31,3 +35,5 @@ def forward_diffusion_sample(x_0, t, device="cpu"):
     sqrt_one_minus = get_index_from_list(sqrt_one_minus_alphas_cumprod, t, x_0.shape)
     x_t = sqrt_alpha * x_0 + sqrt_one_minus * noise
     return x_t, noise
+
+

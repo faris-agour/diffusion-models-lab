@@ -1,241 +1,290 @@
-
 # Diffusion Models Lab  
-*A modular laboratory for training, sampling, and visualizing diffusion models — developed for SAMSUNG Labs.*
+*A modular laboratory for training, sampling, and visualizing diffusion models — developed during experiments at Samsung Labs.*
+
+> 🔹 **Current model:** DDPM v0.2 (Upgraded UNet + cosine scheduler)  
+> 🔹 Previous: DDPM v0.1 (baseline)
 
 ---
 
-# 🌫️ Overview
+## 🌫️ Overview
 
 This repository implements a clean, modular, research-oriented framework for **Denoising Diffusion Probabilistic Models (DDPMs)** including:
 
-- Forward (noising) process `q(x_t | x_0)`
-- Reverse (denoising) process `p(x_{t-1} | x_t)`
-- Strong U‑Net backbone with timestep embeddings
-- EMA (Exponential Moving Average) shadow model for high‑quality sampling
-- Checkpointing + resume support
-- Forward & reverse visualization utilities
-- Training and sampling entry scripts
+- Forward (noising) process `q(x_t | x_0)`  
+- Reverse (denoising) process `p(x_{t-1} | x_t)`  
+- Strong U‑Net backbone with timestep embeddings  
+- EMA (Exponential Moving Average) shadow model for high‑quality sampling  
+- Checkpointing + resume support  
+- Forward & reverse visualization utilities  
+- Training and sampling entry scripts  
 
+The architecture follows the core ideas from:
+
+- **Ho et al., DDPM (NeurIPS 2020)**  
+- **Song et al., Score-Based Models (ICLR 2021)**  
 
 ---
 
-# 🧩 Key Features
+## 🧩 Key Features
 
 ### ✔ Full DDPM implementation
-- Linear beta schedule
-- Closed-form forward noising
-- Learned reverse denoising process
+- Linear and cosine beta schedules  
+- Closed-form forward noising  
+- Learned reverse denoising process (ε‑prediction objective)  
 
-### ✔ Strong U-Net architecture
-- Encoder → Bottleneck → Decoder
-- Residual blocks
-- Skip connections
-- Timestep sinusoidal embeddings
-- Noise prediction head (3-channel ε̂θ output)
+### ✔ Strong U‑Net architecture (v0.2)
+- Encoder → Bottleneck → Decoder  
+- Residual blocks with time conditioning  
+- Skip connections at multiple scales  
+- Sinusoidal timestep embeddings + MLP  
+- Noise prediction head (3‑channel ε̂_θ output)  
 
 ### ✔ EMA Model (High-Quality Sampling)
 We maintain a shadow model:
 
-```
-EMA = decay * EMA + (1−decay) * Model
+```text
+EMA = decay * EMA + (1 − decay) * Model
 ```
 
-EMA drastically improves:
+EMA improves:
 - Sampling sharpness  
-- Stability  
+- Training stability  
 - High-frequency consistency  
 
-Sampling now uses the **EMA model by default**.
+Sampling scripts are designed to use the **EMA model checkpoint** when available (e.g., `ddpm_best.pt`).
+
+---
 
 ## 🔧 Visualization Tools
 
-This repo includes utilities to visualize:
+This repo includes utilities and notebooks to visualize:
 
-- Progressive noising (forward diffusion)
-- Progressive denoising (reverse diffusion)
-- Full side‑by‑side forward/reverse grids
+- Progressive noising (forward diffusion)  
+- Progressive denoising (reverse diffusion)  
+- Forward vs. reverse qualitative behavior  
+
+You can extend `utils.py` and the notebooks in `notebooks/` to generate custom forward/reverse strips and grids.
 
 ---
-## 📁 Project Structure (DDPM v1)
 
-```
+## 📁 Project Structure (DDPM v0.2)
+
+```text
 diffusion-models-lab/
 │
 ├── models/
-│   ├── model.py                 # Strong UNet backbone
-│   └── ema.py                   # EMA shadow model
+│   ├── model.py          # StrongUNet v2 backbone (time‑conditioned)
+│   └── ema.py            # EMA shadow model
 │
 ├── methods/
-│   └── ddpm.py                  # DDPM: q_sample, p_sample, loss, sampling
+│   └── ddpm.py           # DDPM: q_sample, p_sample, loss, sampling
 │
 ├── diffusion/
-│   └── scheduler.py             # Linear & cosine beta schedules
+│   └── scheduler.py      # Linear & cosine beta schedules + indexing helpers
 │
 ├── training/
-│   ├── train.py                 # Training pipeline (EMA, checkpoints)
-│   └── sample.py                # Sampling script (EMA-enabled)
+│   ├── train.py          # Training pipeline (optimizer, EMA, checkpoints)
+│   └── sample.py         # Sampling script (loads DDPM + checkpoint)
 │
-├── utils.py                     # Visualization utilities
-├── data.py                      # Stanford Cars dataset loader
-├── notebooks/                   # Forward/backward analysis notebooks
-├── assets/                      # Images & diagrams
+├── utils.py              # Visualization helpers (grids, denorm, etc.)
+├── data.py               # Stanford Cars dataset loader + transforms
+├── notebooks/            # Forward/backward analysis notebooks
+├── assets/               # Images & diagrams
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
-# 🧠 Diffusion Models: Core Idea
+## 🧠 Diffusion Models: Core Idea
 
-Diffusion models learn to **reverse a noise process**.
+Diffusion models learn to **reverse a gradual noise process**.
 
 ### 1) Forward (Noising) Process  
-We gradually corrupt a clean image \(x_0\)
 
+We gradually corrupt a clean image \(x_0\):
+
+```math
+q(x_t \mid x_0) = \sqrt{\bar\alpha_t}\, x_0 + \sqrt{1 - \bar\alpha_t}\,\epsilon,\quad \epsilon \sim \mathcal{N}(0, I)
+```
 
 After many steps, \(x_T\) becomes nearly pure noise.
 
 ### 2) Reverse (Denoising) Process  
-The U-Net learns:
 
-\[
-\epsilon_	heta(x_t, t)
-\]
+The U‑Net learns to predict the noise:
 
-which is used to compute:
+```math
+\hat{\epsilon}_\theta(x_t, t)
+```
 
-\[
-x_{t-1} = f(x_t, \hat{\epsilon}_	heta)
-\]
+which is then used to compute an estimate of \(x_{t-1}\):
 
-This produces a new sample starting from random noise.
+```math
+x_{t-1} = f(x_t, \hat{\epsilon}_\theta, t).
+```
 
----
-
-# 🌫️ Forward Diffusion Visualization
-
-This strip shows how a clean image becomes increasingly noisy.
-
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/2db10fcd-6afd-4d3f-a6f0-ca8c8b3316cd"/>
-</p>
+Starting from random Gaussian noise and iterating this reverse process gives a new generated image.
 
 ---
 
-# ⏪ Reverse Denoising Visualization (Using EMA)
-
-The reverse process starts from pure noise and progressively reconstructs structure:
-
-
----
-
-# 🧱 U-Net Architecture
+## 🧱 U‑Net Architecture (StrongUNet v2)
 
 ### Encoder
-- Conv → Norm → Activation  
-- Downsampling  
-- Save skip connections  
+- Conv → Norm → SiLU  
+- Downsampling via strided convolutions  
+- Residual blocks with time embeddings  
+- Skip connections stored at each resolution  
 
 ### Bottleneck
-- Residual blocks  
-- Global structure modeling  
+- Two time‑conditioned residual blocks  
+- High‑level structure and global context  
 
 ### Decoder
-- Upsampling  
-- Skip concatenation  
-- Residual refinement  
+- Transposed conv upsampling  
+- Skip concatenation from encoder  
+- Residual refinement blocks  
 
-### Timestep embedding
-We encode the diffusion step using sinusoidal embeddings + MLP injection.
+### Timestep Embedding
+- Sinusoidal time embedding → MLP  
+- Injected into every residual block as an additive conditioning term  
 
 ---
 
-# 🔧 Training
+## 🔧 Training
 
-Run training:
+From the project root:
 
-```
-python -m training.train   
+```bash
+python -m training.train
 ```
 
 Features:
-- EMA updates every step  
-- Checkpoints every 5 epochs  
-- Best model saved automatically
 
-Resume training:
+- DDPM ε‑prediction loss (MSE between true noise and predicted noise)  
+- EMA updates during training (shadow model)  
+- Checkpoints written under `checkpoints/`, e.g.:  
+  - `ddpm_final.pt` – final model  
+  - `ddpm_best.pt` – best EMA model (if enabled)  
 
+Resume training from a checkpoint:
+
+```bash
+python -m training.train --resume checkpoints/ddpm_best.pt
 ```
-python -m training.train --resume checkpoints/epoch_20.pt
-```
+
+(Adjust the path to match the checkpoint you want to continue from.)
 
 ---
 
 ## 🎨 Sampling (Using EMA)
 
-Generate images:
+Generate images from a trained model:
 
+```bash
+python -m training.sample --ckpt checkpoints/ddpm_best.pt
 ```
-python -m training.sample --ckpt checkpoints/best_model.pt
-```
 
-Output:
+Typical behavior:
 
-<img src="https://github.com/user-attachments/assets/88dd95be-888f-444b-9f24-1f8a2212438c"
-     alt="sample"
-     width="400">
+- Starts from pure Gaussian noise  
+- Runs the reverse DDPM process for `T` steps (e.g., 400)  
+- Saves a grid under `assets/` (e.g., `ddpm_samples_epoch50.png`)  
 
-
-
-Uses:
-- EMA weights 
-- 200-step denoising loop  
-- Strong U-Net backbone  
+You can customize batch size, image size, and output path inside `training/sample.py`.
 
 ---
 
-# 🔍 Forward + Reverse Visualization
+## 🔍 Forward / Reverse Analysis
 
-To generate BOTH forward & reverse strips:
+For deeper inspection of the diffusion process, use the notebooks in `notebooks/`:
 
-```
-python visualize_forward_reverse.py --ckpt checkpoints/best_model.pt
-```
+- `01_forward_diffusion.ipynb` — visualize how a clean image is gradually noised  
+- `02_backward_diffusion.ipynb` — explore denoising behavior and sampling trajectories  
 
-Output:
-
-<img src="https://github.com/user-attachments/assets/c1d7c798-e6b0-4866-875b-1ee9105f06b8"
-     alt="reverse"
-     width="800">
-
-
-
+You can combine these with helpers from `utils.py` to export forward/reverse strips for reports or slides.
 
 ---
 
-## 📌 Versioning (IMPORTANT)
+## 📌 Versioning
 
-This repo uses **semantic versioning for models**, not code only.
+This repo uses **simple version tags** on Git to track model evolution.
 
 | Version Tag | Model Type | Description |
 |-------------|------------|-------------|
-| **v1.0** | DDPM‑v1 | Current version (you are here) |
-| **v2.0** | DDPM‑Improved | UNet‑v2 + Attention + Cosine schedule + EMA‑optimized |
+| **v0.2**    | DDPM‑v2    | Current version – StrongUNet v2 + cosine scheduler + cleaned repo structure |
+| **v0.1**    | DDPM‑v1    | Initial baseline implementation (simpler UNet, linear schedule) |
 
-### To tag this version as DDPM‑v1:
+Tagging the current state as **v0.2**:
 
+```bash
+git tag v0.2
+git push origin v0.2
 ```
-git tag v1.0
-git push origin v1.0
+
+(You can also create a GitHub Release pointing to this tag.)
+
+To reproduce or inspect the older baseline (v0.1), check out the `v0.1` tag once it is created:
+
+```bash
+git checkout v0.1
 ```
 
 ---
 
-# 🔬 Tips
+## 🔬 Tips & Next Steps
 
-- Use EMA for best samples  
-- Higher resolution needs bigger U-Net  
-- Cosine schedules often outperform linear  
-- Sampling speed can be improved with DDIM  
+- Use EMA checkpoints (`ddpm_best.pt`) for the best visual quality.  
+- Higher resolutions require increasing UNet capacity (more channels, attention).  
+- Cosine beta schedules generally outperform purely linear schedules.  
+- Sampling speed can be improved by adding **DDIM** or other fast samplers on top of this DDPM core.  
+- Future versions of this lab can include:
+  - DDPM‑Improved (attention UNet + advanced schedules)  
+  - DDIM (fast deterministic sampling)  
+  - Latent Diffusion (diffusion in VAE latent space)  
 
 ---
+
+## 🧪 Using the Trained Model in Your Own Code
+
+You can also load the trained model and DDPM wrapper directly in your own scripts, for example in a notebook or another project:
+
+```python
+import torch
+
+from models.model import StrongUNet
+from methods.ddpm import DDPM
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# 1) Restore UNet
+model = StrongUNet(img_ch=3, time_dim=256).to(device)
+
+ckpt = torch.load("checkpoints/ddpm_best.pt", map_location=device)
+state_dict = ckpt.get("model", ckpt.get("ema_model", ckpt))
+model.load_state_dict(state_dict)
+model.eval()
+
+# 2) Wrap with DDPM
+ddpm = DDPM(
+    model=model,
+    timesteps=400,
+    beta_schedule="cosine",
+    device=device,
+)
+
+# 3) Sample a small batch
+with torch.no_grad():
+    samples = ddpm.sample(batch_size=4, img_channels=3, img_size=64)  # [-1, 1]
+```
+
+You can then denormalize and visualize `samples` using helpers from `utils.py` or your own plotting code.
+
+---
+
+## 📚 References
+
+- Ho et al., *Denoising Diffusion Probabilistic Models* (NeurIPS 2020)  
+- Song et al., *Score-Based Generative Modeling* (ICLR 2021)  
+- Karras et al., *Elucidating Diffusion Models* (CVPR 2022)  
+- Koppers et al., *Diffusion Models for Medical Imaging* (MedIA 2023)  

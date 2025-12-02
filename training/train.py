@@ -41,12 +41,12 @@ def train_ddpm(
     # ------------------------------------------------------------------
     # 2) Model + DDPM wrapper
     # ------------------------------------------------------------------
-    unet = StrongUNet().to(device)
+    model = StrongUNet(img_ch=3, time_dim=256).to(device)
+
     ddpm = DDPM(
-        model=unet,
-        timesteps=timesteps,
-        beta_start=1e-4,
-        beta_end=2e-2,
+        model=model,
+        timesteps=400,
+        beta_schedule="cosine",
         device=device,
     )
 

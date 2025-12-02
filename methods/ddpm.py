@@ -1,7 +1,11 @@
 from diffusion.utils import forward_diffusion_sample
 import torch
 import torch.nn.functional as F
-from diffusion.scheduler import linear_beta_schedule, get_index_from_list
+from diffusion.scheduler import (
+    linear_beta_schedule,
+    cosine_beta_schedule,
+    get_index_from_list,
+)
 
 
 class DDPM:
@@ -16,6 +20,7 @@ class DDPM:
         timesteps: int = 200,
         beta_start: float = 1e-4,
         beta_end: float = 2e-2,
+        beta_schedule: str = "cosine",
         device: str = "cuda"
     ):
         """
@@ -30,8 +35,15 @@ class DDPM:
         self.device = device
         self.T = timesteps
 
-        # --- define beta schedule ---
-        self.betas = linear_beta_schedule(timesteps, beta_start, beta_end).to(device)
+        # --- choose beta schedule ---
+        if beta_schedule == "linear":
+            betas = linear_beta_schedule(timesteps, beta_start, beta_end)
+        elif beta_schedule == "cosine":
+            betas = cosine_beta_schedule(timesteps)
+        else:
+            raise ValueError(f"Unknown beta_schedule: {beta_schedule}")
+
+        self.betas = betas.to(device)  # [T]
         self.alphas = 1.0 - self.betas
         self.alphas_cumprod = torch.cumprod(self.alphas, dim=0)
         self.alphas_cumprod_prev = torch.cat(

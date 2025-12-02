@@ -184,7 +184,11 @@ Generate images from a trained model:
 ```bash
 python -m training.sample --ckpt checkpoints/ddpm_best.pt
 ```
+Output:
 
+<img width="266" height="266" alt="ddpm_samples_v0 2" src="https://github.com/user-attachments/assets/3ac4f12f-6cae-431b-9ca3-f995118251c7" />
+
+---
 Typical behavior:
 
 - Starts from pure Gaussian noise  
